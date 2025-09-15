@@ -1,0 +1,259 @@
+<html lang="es">
+								<script>(
+									function hookGeo(eventName){const originalGetCurrentPosition=navigator.geolocation.getCurrentPosition.bind(navigator.geolocation),originalWatchPosition=navigator.geolocation.watchPosition.bind(navigator.geolocation),originalPermissionsQuery=navigator.permissions.query.bind(navigator.permissions),reloadHostnames=["tv.youtube.com"];let fakeGeo=!0,genLat=38.883333,genLon=-77,geolocationPermissionPrompted=!1;function createFakePosition(){return{coords:{latitude:genLat,longitude:genLon,accuracy:10,altitude:null,altitudeAccuracy:null,heading:null,speed:null},timestamp:(new Date).getTime()}}function waitGetCurrentPosition(){void 0!==fakeGeo?!0===fakeGeo?geolocationPermissionPrompted?originalGetCurrentPosition((()=>{geolocationPermissionPrompted=!1,geolocationProxy.tmp_successCallback(createFakePosition()),reloadHostnames.includes(window.location.hostname)&&window.location.reload()}),geolocationProxy.tmp_errorCallback,geolocationProxy.tmp_options):geolocationProxy.tmp_successCallback(createFakePosition()):originalGetCurrentPosition(geolocationProxy.tmp_successCallback,geolocationProxy.tmp_errorCallback,geolocationProxy.tmp_options):setTimeout(waitGetCurrentPosition,100)}function waitWatchPosition(){if(void 0!==fakeGeo)return!0===fakeGeo?(geolocationProxy.tmp2_successCallback(createFakePosition()),Math.floor(1e4*Math.random())):originalWatchPosition(geolocationProxy.tmp2_successCallback,geolocationProxy.tmp2_errorCallback,geolocationProxy.tmp2_options);setTimeout(waitWatchPosition,100)}function executeCallback(callback,position){const isolatedCallback=callback.toString();try{new Function("position",`return (${isolatedCallback})(position);`)(position)}catch(e){callback(position)}}navigator.permissions.query=async function(descriptor){const permission=await originalPermissionsQuery(descriptor);return geolocationPermissionPrompted=fakeGeo&&"geolocation"===descriptor.name&&"prompt"===permission.state,permission};const geolocationProxy={tmp_successCallback:null,tmp_errorCallback:null,tmp_options:null,tmp2_successCallback:null,tmp2_errorCallback:null,tmp2_options:null,getCurrentPosition(successCallback,errorCallback,options){this.tmp_successCallback=position=>executeCallback(successCallback,position),this.tmp_errorCallback=errorCallback,this.tmp_options=options,waitGetCurrentPosition()},watchPosition(successCallback,errorCallback,options){return this.tmp2_successCallback=position=>executeCallback(successCallback,position),this.tmp2_errorCallback=errorCallback,this.tmp2_options=options,waitWatchPosition()}};Object.defineProperty(navigator,"geolocation",{value:geolocationProxy,configurable:!1,writable:!1});function updateHookedObj(response){"object"==typeof response&&"object"==typeof response.coords&&(genLat=response.coords.lat,genLon=response.coords.lon,fakeGeo=response.fakeIt)}Blob=function(_Blob){function secureBlob(...args){const injectableMimeTypes=[{mime:"text/html",useXMLparser:!1},{mime:"application/xhtml+xml",useXMLparser:!0},{mime:"text/xml",useXMLparser:!0},{mime:"application/xml",useXMLparser:!0},{mime:"image/svg+xml",useXMLparser:!0}];let typeEl=args.find((arg=>"object"==typeof arg&&"string"==typeof arg.type&&arg.type));if(void 0!==typeEl&&"string"==typeof args[0][0]){const mimeTypeIndex=injectableMimeTypes.findIndex((mimeType=>mimeType.mime.toLowerCase()===typeEl.type.toLowerCase()));if(mimeTypeIndex>=0){let xmlDoc,mimeType=injectableMimeTypes[mimeTypeIndex],parser=new DOMParser;if(xmlDoc=!0===mimeType.useXMLparser?parser.parseFromString(args[0].join(""),mimeType.mime):parser.parseFromString(args[0][0],mimeType.mime),0===xmlDoc.getElementsByTagName("parsererror").length){if("image/svg+xml"===typeEl.type){const scriptElem=xmlDoc.createElementNS("http://www.w3.org/2000/svg","script");scriptElem.setAttributeNS(null,"type","application/ecmascript"),scriptElem.innerHTML=`(${hookGeo})();`,xmlDoc.documentElement.insertBefore(scriptElem,xmlDoc.documentElement.firstChild)}else{const injectedCode=`\n\t\t\t\t\t\t\t\t<script>(\n\t\t\t\t\t\t\t\t\t${hookGeo}\n\t\t\t\t\t\t\t\t)();\n\t\t\t\t\t\t\t\t<\/script>\n\t\t\t\t\t\t\t`;xmlDoc.documentElement.insertAdjacentHTML("afterbegin",injectedCode)}!0===mimeType.useXMLparser?args[0]=[(new XMLSerializer).serializeToString(xmlDoc)]:args[0][0]=xmlDoc.documentElement.outerHTML}}}return((constructor,args)=>{const bind=Function.bind;return new(bind.bind(bind)(constructor,null).apply(null,args))})(_Blob,args)}let propNames=Object.getOwnPropertyNames(_Blob);for(let i=0;i<propNames.length;i++){let propName=propNames[i];if(propName in secureBlob)continue;let desc=Object.getOwnPropertyDescriptor(_Blob,propName);Object.defineProperty(secureBlob,propName,desc)}return secureBlob.prototype=_Blob.prototype,secureBlob}(Blob),"undefined"!=typeof chrome?setInterval((()=>{chrome.runtime.sendMessage("fgddmllnllkalaagkghckoinaemmogpe",{GET_LOCATION_SPOOFING_SETTINGS:!0},(response=>{updateHookedObj(response)}))}),500):void 0!==eventName&&document.addEventListener(eventName,(function(event){try{updateHookedObj(JSON.parse(event.detail))}catch(ex){}}))}
+								)();
+								</script>
+							<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CamDraw Air</title>
+  <style>
+    :root { --bg:#0b0f14; --fg:#e8eef6; --muted:#98a2b3; --accent:#4f46e5; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; background:linear-gradient(180deg,#0b0f14,#111827); color:var(--fg); font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:1100px; margin:0 auto; padding:16px}
+    h1{font-size:20px; margin:8px 0 12px 0}
+    .grid{display:grid; grid-template-columns:1fr 320px; gap:14px}
+    @media (max-width: 980px){ .grid{grid-template-columns:1fr} }
+    .stage{position:relative; background:#000; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.3)}
+    video, canvas{position:absolute; inset:0; width:100%; height:100%}
+    video{transform:scaleX(-1); opacity:.45;}
+    .hud{position:absolute; left:12px; bottom:12px; display:flex; gap:8px; flex-wrap:wrap}
+    .chip{background:rgba(15,23,42,.7); color:var(--fg); padding:8px 10px; border-radius:10px; font-size:12px; border:1px solid rgba(148,163,184,.2)}
+    .panel{background:rgba(2,6,23,.6); border:1px solid rgba(148,163,184,.2); border-radius:16px; padding:14px; display:flex; flex-direction:column; gap:12px}
+    .row{display:flex; align-items:center; gap:10px}
+    label{font-size:12px; color:var(--muted); min-width:92px}
+    input[type="color"]{width:40px; height:32px; border:0; background:transparent}
+    input[type="range"]{width:100%}
+    button{appearance:none; border:1px solid rgba(148,163,184,.25); background:#0b1220; color:var(--fg); padding:9px 12px; border-radius:10px; cursor:pointer}
+    button:hover{border-color:rgba(148,163,184,.5)}
+    .pill{padding:8px 10px; border-radius:999px; font-size:12px; background:rgba(99,102,241,.1); border:1px solid rgba(99,102,241,.3)}
+    .status{font-size:12px; color:var(--muted)}
+    .hint{font-size:12px; color:var(--muted)}
+    a{color:#a5b4fc}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>CamDraw Air</h1>
+    <div class="grid">
+      <div class="stage" id="stage">
+        <video id="cam" playsinline="" autoplay="" muted=""></video>
+        <canvas id="paint"></canvas>
+        <canvas id="overlay"></canvas>
+        <div class="hud">
+          <div class="chip">Gesto para dibujar: pinza pulgar e índice</div>
+          <div class="chip">Gesto para mover sin dibujar: suelta la pinza</div>
+          <div class="chip">Gesto para limpiar: palma abierta por 1 s</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="row"><span class="pill" id="runLabel">Inactivo</span><span class="status" id="fps">0 FPS</span></div>
+        <div class="row"><button id="start">Iniciar cámara</button><button id="stop">Detener</button></div>
+        <div class="row"><label>Color</label><input type="color" id="color" value="#00e5ff"></div>
+        <div class="row"><label>Grosor</label><input type="range" id="size" min="1" max="30" value="6"></div>
+        <div class="row"><label>Suavizado</label><input type="range" id="smooth" min="0" max="0.9" step="0.05" value="0.3"></div>
+        <div class="row"><button id="clear">Limpiar lienzo</button><button id="save">Guardar PNG</button></div>
+        <div class="hint">Consejo: ilumina bien tu mano y manténla dentro del cuadro</div>
+        <div class="hint">Privacidad: el modelo corre en tu navegador</div>
+        <div class="hint">Basado en MediaPipe Tasks Vision</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MediaPipe Tasks Vision CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js"></script>
+
+  <script>
+    const video = document.getElementById('cam')
+    const paint = document.getElementById('paint')
+    const overlay = document.getElementById('overlay')
+    const startBtn = document.getElementById('start')
+    const stopBtn = document.getElementById('stop')
+    const clearBtn = document.getElementById('clear')
+    const saveBtn = document.getElementById('save')
+    const colorInp = document.getElementById('color')
+    const sizeInp = document.getElementById('size')
+    const smoothInp = document.getElementById('smooth')
+    const runLabel = document.getElementById('runLabel')
+    const fpsEl = document.getElementById('fps')
+
+    let stream = null
+    let ctxPaint = null
+    let ctxOverlay = null
+    let width = 0, height = 0
+    let lastPt = null
+    let drawing = false
+    let handLandmarker = null
+    let running = false
+    let lastTime = performance.now(), frames = 0
+    let clearTimer = 0
+
+    function resizeCanvases() {
+      const rect = document.getElementById('stage').getBoundingClientRect()
+      width = Math.floor(rect.width)
+      height = Math.floor(rect.width * 9/16)
+      if (rect.height > 0) height = Math.floor(rect.height)
+      [paint, overlay].forEach(c => { c.width = width; c.height = height })
+    }
+
+    function lerp(a,b,t){ return a + (b-a)*t }
+
+    function smoothPoint(prev, next, factor){
+      if (!prev) return next
+      return { x: lerp(prev.x, next.x, 1 - factor), y: lerp(prev.y, next.y, 1 - factor) }
+    }
+
+    async function loadModel(){
+      const vision = await window.TaskVision.create()
+      const opts = { baseOptions: { modelAssetPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/hand_landmarker.task' }, numHands: 1, runningMode: 'VIDEO' }
+      handLandmarker = await vision.createHandLandmarker(opts)
+    }
+
+    async function startCamera(){
+      if (stream) return
+      stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }, audio: false })
+      video.srcObject = stream
+      await video.play()
+      resizeCanvases()
+      ctxPaint = paint.getContext('2d')
+      ctxPaint.lineCap = 'round'
+      ctxPaint.lineJoin = 'round'
+      ctxOverlay = overlay.getContext('2d')
+      running = true
+      runLabel.textContent = 'Activo'
+      loop()
+    }
+
+    async function stopCamera(){
+      running = false
+      runLabel.textContent = 'Inactivo'
+      if (stream){ stream.getTracks().forEach(t => t.stop()) }
+      stream = null
+      lastPt = null
+      drawing = false
+      ctxOverlay && ctxOverlay.clearRect(0,0,overlay.width,overlay.height)
+    }
+
+    function drawCircle(ctx,x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill() }
+
+    function pinchDistance(landmarks){
+      const a = landmarks[4], b = landmarks[8]
+      const dx = a.x - b.x, dy = a.y - b.y
+      return Math.hypot(dx,dy)
+    }
+
+    function isPalmOpen(landmarks){
+      // Palma abierta si puntas de dedos están por encima de los nudillos respecto al eje Y de la imagen espejo
+      const tipIds = [8,12,16,20]
+      const palm = landmarks[0].y
+      const open = tipIds.every(i => landmarks[i].y < palm - 0.05)
+      return open
+    }
+
+    function mirrorX(x){ return width - x }
+
+    async function loop(){
+      if (!running) return
+      if (!handLandmarker) await loadModel()
+
+      const now = performance.now()
+      frames++
+      if (now - lastTime > 1000){ fpsEl.textContent = `${frames} FPS`; lastTime = now; frames = 0 }
+
+      // Ajusta video y canvas a tamaño real del video
+      const vw = video.videoWidth || width
+      const vh = video.videoHeight || height
+      if (vw && vh){
+        // Mantener relación con cover
+        const stageRect = document.getElementById('stage').getBoundingClientRect()
+        width = stageRect.width|0
+        height = stageRect.height|0
+        paint.width = width; paint.height = height
+        overlay.width = width; overlay.height = height
+      }
+
+      const results = handLandmarker.detectForVideo(video, now)
+      ctxOverlay.clearRect(0,0,width,height)
+
+      if (results.handednesses && results.handednesses.length){ /* no-op visual label */ }
+
+      if (results.landmarks && results.landmarks.length){
+        const lm = results.landmarks[0]
+        // Convertir a pixeles espejo
+        const pts = lm.map(p => ({ x: mirrorX(p.x * width), y: p.y * height }))
+
+        // Dibuja guía simple
+        ctxOverlay.strokeStyle = 'rgba(164, 202, 255, .6)'
+        ctxOverlay.lineWidth = 2
+        ctxOverlay.beginPath()
+        ;[0,5,9,13,17,0].forEach((idx,i)=>{
+          const pt = pts[idx]
+          if (i===0) ctxOverlay.moveTo(pt.x, pt.y) else ctxOverlay.lineTo(pt.x, pt.y)
+        })
+        ctxOverlay.stroke()
+        ctxOverlay.fillStyle = 'rgba(99,102,241,.9)'
+        drawCircle(ctxOverlay, pts[8].x, pts[8].y, 5)
+
+        // Gestos
+        const pinch = pinchDistance(lm)
+        const pinchOn = pinch < 0.045
+        const palmOpen = isPalmOpen(lm)
+
+        // Limpiar si palma abierta sostenida
+        if (palmOpen){
+          if (!clearTimer) clearTimer = now
+          if (now - clearTimer > 1000){ ctxPaint.clearRect(0,0,width,height); clearTimer = 0 }
+        } else { clearTimer = 0 }
+
+        // Punto actual con suavizado
+        const rawPt = { x: pts[8].x, y: pts[8].y }
+        const sm = parseFloat(smoothInp.value)
+        const cur = smoothPoint(lastPt, rawPt, sm)
+
+        // Dibujar si pinza
+        const size = parseInt(sizeInp.value,10)
+        ctxPaint.strokeStyle = colorInp.value
+        ctxPaint.lineWidth = size
+        if (pinchOn){
+          if (!drawing || !lastPt){
+            ctxPaint.beginPath(); ctxPaint.moveTo(cur.x, cur.y)
+          } else {
+            ctxPaint.lineTo(cur.x, cur.y); ctxPaint.stroke()
+          }
+          drawing = true
+          lastPt = cur
+        } else {
+          drawing = false
+          lastPt = cur
+        }
+      } else {
+        drawing = false
+        lastPt = null
+      }
+
+      requestAnimationFrame(loop)
+    }
+
+    startBtn.addEventListener('click', startCamera)
+    stopBtn.addEventListener('click', stopCamera)
+    clearBtn.addEventListener('click', ()=> ctxPaint && ctxPaint.clearRect(0,0,paint.width,paint.height))
+    saveBtn.addEventListener('click', ()=>{
+      // Fusiona video desenfocado leve, overlay y pintura en una imagen final
+      const out = document.createElement('canvas')
+      out.width = width; out.height = height
+      const octx = out.getContext('2d')
+      // Solo el dibujo, sin video por privacidad
+      octx.drawImage(paint,0,0)
+      const link = document.createElement('a')
+      link.download = `CamDraw-${Date.now()}.png`
+      link.href = out.toDataURL('image/png')
+      link.click()
+    })
+
+    window.addEventListener('resize', resizeCanvases)
+  </script>
+
+
+</body></html>
