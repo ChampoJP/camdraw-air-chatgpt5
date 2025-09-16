@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CamDraw Air, prueba básica de cámara</title>
+  <title>CamDraw Air, cámara + puntos de mano</title>
   <style>
-    :root { --bg:#0b0f14; --fg:#e8eef6; --muted:#98a2b3; }
+    :root { --bg:#0b0f14; --fg:#e8eef6; --muted:#98a2b3 }
     *{box-sizing:border-box}
     html,body{height:100%}
     body{margin:0; background:#0b0f14; color:var(--fg); font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    .wrap{max-width:880px; margin:0 auto; padding:16px; display:flex; flex-direction:column; gap:12px}
-    .stage{position:relative; background:#000; border-radius:12px; overflow:hidden; aspect-ratio:16/9;}
+    .wrap{max-width:900px; margin:0 auto; padding:16px; display:flex; flex-direction:column; gap:12px}
+    .stage{position:relative; background:#000; border-radius:12px; overflow:hidden; aspect-ratio:16/9}
     video,canvas{position:absolute; inset:0; width:100%; height:100%}
     video{transform:scaleX(-1)}
     .panel{display:grid; grid-template-columns:1fr 1fr; gap:8px}
@@ -23,7 +23,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Prueba básica de cámara</h1>
+    <h1>Cámara + puntos de mano</h1>
     <div class="stage">
       <video id="cam" playsinline autoplay muted></video>
       <canvas id="overlay"></canvas>
@@ -38,11 +38,13 @@
         <button id="stop">Detener</button>
         <button id="draw">Dibujar con mouse</button>
         <button id="clear">Limpiar dibujo</button>
+        <button id="load">Cargar detector</button>
       </div>
     </div>
     <div id="log" class="log">Listo</div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14"></script>
   <script>
     const video = document.getElementById('cam')
     const overlay = document.getElementById('overlay')
@@ -52,11 +54,14 @@
     const drawBtn = document.getElementById('draw')
     const clearBtn = document.getElementById('clear')
     const deviceSel = document.getElementById('device')
+    const loadBtn = document.getElementById('load')
     const logEl = document.getElementById('log')
 
     let stream = null
     let drawMode = false
     let drawing = false
+    let landmarker = null
+    let running = false
 
     function log(t, cls=''){ logEl.textContent = t; logEl.className = 'log ' + cls }
 
@@ -84,21 +89,25 @@
         video.srcObject = stream
         await video.play().catch(()=>{})
         log('Cámara iniciada', 'ok')
+        running = true
+        requestAnimationFrame(loop)
       }catch(e){ log('Fallo al iniciar cámara, ' + e.name + ' ' + e.message, 'err') }
     }
 
     function stopCam(){
+      running = false
       if (!stream) return
       stream.getTracks().forEach(t=>t.stop())
       stream = null
       video.srcObject = null
+      const ctx = overlay.getContext('2d')
+      ctx.clearRect(0,0,overlay.width,overlay.height)
       log('Cámara detenida')
     }
 
     // Dibujo con mouse para validar el canvas
     const ctx = overlay.getContext('2d')
     ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 6
-
     overlay.addEventListener('pointerdown', e=>{ if(!drawMode) return; drawing=true; const r=overlay.getBoundingClientRect(); ctx.beginPath(); ctx.moveTo(e.clientX-r.left, e.clientY-r.top) })
     overlay.addEventListener('pointermove', e=>{ if(!drawMode||!drawing) return; const r=overlay.getBoundingClientRect(); ctx.lineTo(e.clientX-r.left, e.clientY-r.top); ctx.stroke() })
     overlay.addEventListener('pointerup', ()=>{ drawing=false })
@@ -109,6 +118,39 @@
     stopBtn.addEventListener('click', stopCam)
     drawBtn.addEventListener('click', ()=>{ drawMode = !drawMode; log(drawMode? 'Dibujo con mouse activo' : 'Dibujo con mouse inactivo', drawMode? 'ok' : '') })
     clearBtn.addEventListener('click', ()=> ctx.clearRect(0,0,overlay.width,overlay.height))
+
+    // Cargar solo el detector y dibujar puntos, sin gestos
+    async function loadDetector(){
+      try{
+        log('Cargando detector...')
+        const fs = await window.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm')
+        landmarker = await window.HandLandmarker.createFromOptions(fs, {
+          baseOptions: { modelAssetPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/hand_landmarker.task' },
+          numHands: 1,
+          runningMode: 'VIDEO'
+        })
+        log('Detector listo', 'ok')
+      }catch(e){ log('Error al cargar detector, ' + e.message, 'err') }
+    }
+
+    loadBtn.addEventListener('click', loadDetector)
+
+    function loop(){
+      if (!running) return
+      const w = overlay.width, h = overlay.height
+      ctx.clearRect(0,0,w,h)
+
+      if (landmarker){
+        const now = performance.now()
+        const results = landmarker.detectForVideo(video, now)
+        if (results && results.landmarks && results.landmarks.length){
+          const lms = results.landmarks[0]
+          ctx.fillStyle = '#a5b4fc'
+          for (const p of lms){ const x = (1 - p.x) * w; const y = p.y * h; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill() }
+        }
+      }
+      requestAnimationFrame(loop)
+    }
 
     if (!location.protocol.startsWith('https')) log('Abre en HTTPS', 'err')
     if (!navigator.mediaDevices) log('API mediaDevices no disponible', 'err')
