@@ -48,12 +48,15 @@
         <div class="row"><span class="pill" id="runLabel">Inactivo</span><span class="status" id="fps">0 FPS</span></div>
         <div class="row"><button id="start">Iniciar cámara</button><button id="stop">Detener</button></div>
         <div class="row"><label>Dispositivo</label><select id="device"></select><button id="refresh">Actualizar</button></div>
+        <div class="row"><label>Umbral pinza</label><input type="range" id="thresh" min="0.02" max="0.12" step="0.005" value="0.06"></div>
+        <div class="row"><label>Modo</label><label><input type="checkbox" id="drawAlways"> Dibujar siempre</label><label><input type="checkbox" id="showDots" checked> Ver puntos</label></div>
         <div class="row"><label>Color</label><input type="color" id="color" value="#00e5ff"></div>
         <div class="row"><label>Grosor</label><input type="range" id="size" min="1" max="30" value="6"></div>
         <div class="row"><label>Suavizado</label><input type="range" id="smooth" min="0" max="0.9" step="0.05" value="0.3"></div>
         <div class="row"><button id="clear">Limpiar lienzo</button><button id="save">Guardar PNG</button></div>
         <div class="status" id="log"></div>
       </div>
+    </div>
     </div>
   </div>
 
@@ -75,6 +78,9 @@
     const deviceSel = document.getElementById('device')
     const refreshBtn = document.getElementById('refresh')
     const logEl = document.getElementById('log')
+    const threshInp = document.getElementById('thresh')
+    const drawAlwaysInp = document.getElementById('drawAlways')
+    const showDotsInp = document.getElementById('showDots')
 
     let stream = null
     let ctxPaint = null
@@ -181,13 +187,21 @@
       if (results && results.landmarks && results.landmarks.length){
         const lm = results.landmarks[0]
         const pts = lm.map(p => ({ x: mirrorX(p.x * width), y: p.y * height }))
-        ctxOverlay.strokeStyle = 'rgba(164, 202, 255, .6)'; ctxOverlay.lineWidth = 2
-        ctxOverlay.beginPath(); [0,5,9,13,17,0].forEach((idx,i)=>{ const pt = pts[idx]; if (i===0) ctxOverlay.moveTo(pt.x, pt.y); else ctxOverlay.lineTo(pt.x, pt.y) }); ctxOverlay.stroke()
-        ctxOverlay.fillStyle = 'rgba(99,102,241,.9)'; drawCircle(ctxOverlay, pts[8].x, pts[8].y, 5)
+
+        // Visualización
+        if (showDotsInp.checked){
+          ctxOverlay.strokeStyle = 'rgba(164, 202, 255, .6)'; ctxOverlay.lineWidth = 2
+          ctxOverlay.beginPath(); [0,5,9,13,17,0].forEach((idx,i)=>{ const pt = pts[idx]; if (i===0) ctxOverlay.moveTo(pt.x, pt.y); else ctxOverlay.lineTo(pt.x, pt.y) }); ctxOverlay.stroke()
+          ctxOverlay.fillStyle = 'rgba(99,102,241,.9)'; drawCircle(ctxOverlay, pts[8].x, pts[8].y, 5)
+        }
 
         const pinch = pinchDistance(lm)
-        const pinchOn = pinch < 0.045
+        const threshold = parseFloat(threshInp.value)
+        const pinchOn = drawAlwaysInp.checked || (pinch < threshold)
         const palmOpen = isPalmOpen(lm)
+
+        log(`Mano, sí, Pinza ${pinch.toFixed(3)} ${pinchOn ? 'ON' : 'OFF'}`)
+
         if (palmOpen){ if (!clearTimer) clearTimer = now; if (now - clearTimer > 1000){ ctxPaint.clearRect(0,0,width,height); clearTimer = 0 } } else { clearTimer = 0 }
         const rawPt = { x: pts[8].x, y: pts[8].y }
         const sm = parseFloat(smoothInp.value)
@@ -196,7 +210,7 @@
         ctxPaint.strokeStyle = colorInp.value; ctxPaint.lineWidth = size
         if (pinchOn){ if (!drawing || !lastPt){ ctxPaint.beginPath(); ctxPaint.moveTo(cur.x, cur.y) } else { ctxPaint.lineTo(cur.x, cur.y); ctxPaint.stroke() } drawing = true; lastPt = cur }
         else { drawing = false; lastPt = cur }
-      } else { drawing = false; lastPt = null }
+      } else { drawing = false; lastPt = null; log('Mano, no detectada') }
 
       requestAnimationFrame(loop)
     }
