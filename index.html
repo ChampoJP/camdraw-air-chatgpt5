@@ -49,7 +49,7 @@
         <div class="row"><button id="start">Iniciar cámara</button><button id="stop">Detener</button></div>
         <div class="row"><label>Dispositivo</label><select id="device"></select><button id="refresh">Actualizar</button></div>
         <div class="row"><label>Umbral pinza</label><input type="range" id="thresh" min="0.02" max="0.12" step="0.005" value="0.06"></div>
-        <div class="row"><label>Modo</label><label><input type="checkbox" id="drawAlways"> Dibujar siempre</label><label><input type="checkbox" id="showDots" checked> Ver puntos</label><button id="compat">Modo compatibilidad</button></div>
+        <div class="row"><label>Modo</label><label><input type="checkbox" id="drawAlways"> Dibujar siempre</label><label><input type="checkbox" id="showDots" checked> Ver puntos</label><button id="compat">Modo compatibilidad</button><button id="mouse">Dibujar con mouse</button><button id="local">Cargar modelo local</button></div>
         <div class="row"><label>Color</label><input type="color" id="color" value="#00e5ff"></div>
         <div class="row"><label>Grosor</label><input type="range" id="size" min="1" max="30" value="6"></div>
         <div class="row"><label>Suavizado</label><input type="range" id="smooth" min="0" max="0.9" step="0.05" value="0.3"></div>
@@ -82,6 +82,8 @@
     const drawAlwaysInp = document.getElementById('drawAlways')
     const showDotsInp = document.getElementById('showDots')
     const compatBtn = document.getElementById('compat')
+    const mouseBtn = document.getElementById('mouse')
+    const localBtn = document.getElementById('local')
 
     let stream = null
     let ctxPaint = null
@@ -113,6 +115,13 @@
     function lerp(a,b,t){ return a + (b-a)*t }
     function smoothPoint(prev, next, factor){ if (!prev) return next; return { x: lerp(prev.x,next.x,1 - factor), y: lerp(prev.y,next.y,1 - factor) } }
     function drawCircle(ctx,x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill() }
+
+    // Modo mouse para verificar canvas
+    let mouseMode = false
+    let mouseDown = false
+    overlay.addEventListener('pointerdown', e=>{ if(!mouseMode) return; mouseDown = true; const rect = overlay.getBoundingClientRect(); lastPt = {x:e.clientX-rect.left, y:e.clientY-rect.top}; ctxPaint.beginPath(); ctxPaint.moveTo(lastPt.x,lastPt.y) })
+    overlay.addEventListener('pointermove', e=>{ if(!mouseMode || !mouseDown) return; const rect = overlay.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; ctxPaint.lineTo(x,y); ctxPaint.strokeStyle = colorInp.value; ctxPaint.lineWidth = parseInt(sizeInp.value,10); ctxPaint.stroke() })
+    overlay.addEventListener('pointerup', ()=>{ mouseDown=false })
     function mirrorX(x){ return width - x }
     function pinchDistance(landmarks){ const a = landmarks[4], b = landmarks[8]; const dx = a.x - b.x, dy = a.y - b.y; return Math.hypot(dx,dy) }
     function isPalmOpen(landmarks){ const tipIds = [8,12,16,20]; const palm = landmarks[0].y; return tipIds.every(i => landmarks[i].y < palm - 0.05) }
@@ -120,10 +129,27 @@
     async function loadModel(){
       if (handLandmarker) return
       try{
-        log('Cargando modelo...')
-        const fs = await window.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm')
-        handLandmarker = await window.HandLandmarker.createFromOptions(fs, {
-          baseOptions: { modelAssetPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/hand_landmarker.task' },
+        log('Cargando modelo local...')
+        const fsLocal = await window.FilesetResolver.forVisionTasks('./mp')
+        handLandmarker = await window.HandLandmarker.createFromOptions(fsLocal, {
+          baseOptions: { modelAssetPath: './mp/hand_landmarker.task' },
+          numHands: 1,
+          runningMode: 'VIDEO'
+        })
+        log('Modelo listo (local)')
+      }catch(err){
+        try{
+          log('Fallo local, cargando desde CDN...')
+          const fs = await window.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm')
+          handLandmarker = await window.HandLandmarker.createFromOptions(fs, {
+            baseOptions: { modelAssetPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/hand_landmarker.task' },
+            numHands: 1,
+            runningMode: 'VIDEO'
+          })
+          log('Modelo listo (CDN)')
+        }catch(e){ log('Error al cargar modelo, ' + e.message); console.error(e) }
+      }
+    },
           numHands: 1,
           runningMode: 'VIDEO'
         })
@@ -230,7 +256,9 @@
     clearBtn.addEventListener('click', ()=> ctxPaint && ctxPaint.clearRect(0,0,paint.width,paint.height))
     saveBtn.addEventListener('click', ()=>{ const out = document.createElement('canvas'); out.width = width; out.height = height; const octx = out.getContext('2d'); octx.drawImage(paint,0,0); const link = document.createElement('a'); link.download = `CamDraw-${Date.now()}.png`; link.href = out.toDataURL('image/png'); link.click() })
     refreshBtn.addEventListener('click', enumerateCams)
-    compatBtn.addEventListener('click', initLegacyHands)
+    compatBtn.addEventListener('click', ()=>{ initLegacyHands(); log('Intentando compatibilidad...') })
+    mouseBtn.addEventListener('click', ()=>{ mouseMode = !mouseMode; log(mouseMode ? 'Mouse, activo' : 'Mouse, inactivo') })
+    localBtn.addEventListener('click', async ()=>{ handLandmarker=null; legacyActive=false; await loadModel() })
 
     if (!location.protocol.startsWith('https')){ log('Abre esta página con HTTPS') }
     enumerateCams()
