@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CamDraw Air, cámara + puntos de mano (compat)</title>
+  <title>CamDraw Air, gesto de pinza (compat)</title>
   <style>
     :root { --bg:#0b0f14; --fg:#e8eef6; --muted:#98a2b3 }
     *{box-sizing:border-box}
@@ -14,31 +14,41 @@
     video,canvas{position:absolute; inset:0; width:100%; height:100%}
     video{transform:scaleX(-1)}
     .panel{display:grid; grid-template-columns:1fr 1fr; gap:8px}
-    button,select{padding:10px 12px; border-radius:10px; border:1px solid #394150; background:#0f172a; color:#e5e7eb; cursor:pointer}
-    .row{display:flex; gap:8px; align-items:center}
+    button,select,input[type="range"],input[type="color"]{padding:10px 12px; border-radius:10px; border:1px solid #394150; background:#0f172a; color:#e5e7eb; cursor:pointer}
+    input[type="range"],select{width:100%}
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
     .log{background:#0f172a; border:1px solid #394150; border-radius:10px; padding:10px; min-height:44px; font-size:12px; color:var(--muted)}
     .ok{color:#a7f3d0}
     .err{color:#fecaca}
+    label.small{font-size:12px; color:var(--muted)}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Cámara + puntos de mano (compatibilidad)</h1>
+    <h1>Gesto de pinza para dibujar</h1>
     <div class="stage">
       <video id="cam" playsinline autoplay muted></video>
+      <canvas id="paint"></canvas>
       <canvas id="overlay"></canvas>
     </div>
     <div class="panel">
       <div class="row">
         <button id="refresh">Listar cámaras</button>
         <select id="device"></select>
-      </div>
-      <div class="row">
         <button id="start">Iniciar cámara</button>
         <button id="stop">Detener</button>
+      </div>
+      <div class="row">
         <button id="draw">Dibujar con mouse</button>
         <button id="clear">Limpiar dibujo</button>
         <button id="loadCompat">Cargar detector compat</button>
+        <label class="small"><input type="checkbox" id="showDots" checked> Ver puntos</label>
+      </div>
+      <div class="row">
+        <label class="small">Umbral pinza</label><input id="thresh" type="range" min="0.02" max="0.12" step="0.005" value="0.07">
+        <label class="small">Grosor</label><input id="size" type="range" min="2" max="24" value="6">
+        <label class="small">Suavizado</label><input id="smooth" type="range" min="0" max="0.9" step="0.05" value="0.3">
+        <label class="small">Color</label><input id="color" type="color" value="#22d3ee">
       </div>
     </div>
     <div id="log" class="log">Listo</div>
@@ -47,6 +57,7 @@
   <script>
     const video = document.getElementById('cam')
     const overlay = document.getElementById('overlay')
+    const paint = document.getElementById('paint')
     const refreshBtn = document.getElementById('refresh')
     const startBtn = document.getElementById('start')
     const stopBtn = document.getElementById('stop')
@@ -54,11 +65,17 @@
     const clearBtn = document.getElementById('clear')
     const deviceSel = document.getElementById('device')
     const loadCompatBtn = document.getElementById('loadCompat')
+    const showDotsInp = document.getElementById('showDots')
+    const threshInp = document.getElementById('thresh')
+    const sizeInp = document.getElementById('size')
+    const smoothInp = document.getElementById('smooth')
+    const colorInp = document.getElementById('color')
     const logEl = document.getElementById('log')
 
     let stream = null
     let drawMode = false
     let drawing = false
+    let lastPt = null
     let running = false
 
     // Compat MediaPipe Hands
@@ -68,7 +85,7 @@
 
     function log(t, cls=''){ logEl.textContent = t; logEl.className = 'log ' + cls }
 
-    function resize(){ overlay.width = overlay.clientWidth; overlay.height = overlay.clientHeight }
+    function resize(){ overlay.width = overlay.clientWidth; overlay.height = overlay.clientHeight; paint.width = overlay.clientWidth; paint.height = overlay.clientHeight }
     window.addEventListener('resize', resize)
     resize()
 
@@ -93,7 +110,6 @@
         await video.play().catch(()=>{})
         log('Cámara iniciada', 'ok')
         running = true
-        requestAnimationFrame(loop)
       }catch(e){ log('Fallo al iniciar cámara, ' + e.name + ' ' + e.message, 'err') }
     }
 
@@ -101,35 +117,35 @@
       running = false
       if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null }
       video.srcObject = null
-      const ctx = overlay.getContext('2d')
-      ctx.clearRect(0,0,overlay.width,overlay.height)
+      const octx = overlay.getContext('2d'); octx.clearRect(0,0,overlay.width,overlay.height)
+      const pctx = paint.getContext('2d'); pctx.clearRect(0,0,paint.width,paint.height)
       log('Cámara detenida')
     }
 
     // Dibujo con mouse para validar el canvas
-    const ctx = overlay.getContext('2d')
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 6
-    overlay.addEventListener('pointerdown', e=>{ if(!drawMode) return; drawing=true; const r=overlay.getBoundingClientRect(); ctx.beginPath(); ctx.moveTo(e.clientX-r.left, e.clientY-r.top) })
-    overlay.addEventListener('pointermove', e=>{ if(!drawMode||!drawing) return; const r=overlay.getBoundingClientRect(); ctx.lineTo(e.clientX-r.left, e.clientY-r.top); ctx.stroke() })
+    const pctx = paint.getContext('2d')
+    pctx.lineCap = 'round'; pctx.lineJoin = 'round'
+    overlay.addEventListener('pointerdown', e=>{ if(!drawMode) return; drawing=true; const r=overlay.getBoundingClientRect(); lastPt={x:e.clientX-r.left, y:e.clientY-r.top}; pctx.beginPath(); pctx.moveTo(lastPt.x,lastPt.y) })
+    overlay.addEventListener('pointermove', e=>{ if(!drawMode||!drawing) return; const r=overlay.getBoundingClientRect(); const x=e.clientX-r.left, y=e.clientY-r.top; pctx.strokeStyle = colorInp.value; pctx.lineWidth = parseInt(sizeInp.value,10); pctx.lineTo(x,y); pctx.stroke() })
     overlay.addEventListener('pointerup', ()=>{ drawing=false })
     overlay.addEventListener('pointerleave', ()=>{ drawing=false })
+
+    drawBtn.addEventListener('click', ()=>{ drawMode = !drawMode; log(drawMode? 'Dibujo con mouse activo' : 'Dibujo con mouse inactivo', drawMode? 'ok' : '') })
+    clearBtn.addEventListener('click', ()=> pctx.clearRect(0,0,paint.width,paint.height))
 
     refreshBtn.addEventListener('click', enumerateCams)
     startBtn.addEventListener('click', startCam)
     stopBtn.addEventListener('click', stopCam)
-    drawBtn.addEventListener('click', ()=>{ drawMode = !drawMode; log(drawMode? 'Dibujo con mouse activo' : 'Dibujo con mouse inactivo', drawMode? 'ok' : '') })
-    clearBtn.addEventListener('click', ()=> ctx.clearRect(0,0,overlay.width,overlay.height))
 
     // Utilidad para cargar scripts externos
-    async function loadScript(src){
-      return new Promise((resolve, reject)=>{
-        const s = document.createElement('script')
-        s.src = src
-        s.onload = resolve
-        s.onerror = ()=>reject(new Error('No se pudo cargar ' + src))
-        document.head.appendChild(s)
-      })
-    }
+    async function loadScript(src){ return new Promise((resolve, reject)=>{ const s=document.createElement('script'); s.src=src; s.onload=resolve; s.onerror=()=>reject(new Error('No se pudo cargar '+src)); document.head.appendChild(s) }) }
+
+    function px(n){ return n * overlay.width }
+    function py(n){ return n * overlay.height }
+
+    function pinchDistance(lms){ const a=lms[4], b=lms[8]; const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy) }
+
+    function smooth(prev, cur, f){ if(!prev) return cur; return { x: prev.x + (cur.x - prev.x)*(1 - f), y: prev.y + (cur.y - prev.y)*(1 - f) } }
 
     async function loadCompat(){
       try{
@@ -140,12 +156,29 @@
         hands = new window.Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` })
         hands.setOptions({ maxNumHands:1, modelComplexity:1, minDetectionConfidence:0.5, minTrackingConfidence:0.5 })
         hands.onResults(res=>{
-          const w = overlay.width, h = overlay.height
-          ctx.clearRect(0,0,w,h)
+          const octx = overlay.getContext('2d')
+          octx.clearRect(0,0,overlay.width,overlay.height)
           if (res.multiHandLandmarks && res.multiHandLandmarks.length){
             const lms = res.multiHandLandmarks[0]
-            ctx.fillStyle = '#a5b4fc'
-            for (const p of lms){ const x = (1 - p.x) * w; const y = p.y * h; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill() }
+            // Visualización opcional
+            if (showDotsInp.checked){
+              octx.fillStyle = '#a5b4fc'
+              for (const p of lms){ const x = (1 - p.x) * overlay.width; const y = p.y * overlay.height; octx.beginPath(); octx.arc(x,y,4,0,Math.PI*2); octx.fill() }
+            }
+            // Dibujo por gesto de pinza
+            const threshold = parseFloat(threshInp.value)
+            const pinch = pinchDistance(lms)
+            const tip = lms[8]
+            const raw = { x: (1 - tip.x) * overlay.width, y: tip.y * overlay.height }
+            const sm = parseFloat(smoothInp.value)
+            const cur = smooth(lastPt, raw, sm)
+            pctx.strokeStyle = colorInp.value; pctx.lineWidth = parseInt(sizeInp.value,10)
+            if (pinch < threshold){ if (!drawing || !lastPt){ pctx.beginPath(); pctx.moveTo(cur.x, cur.y) } else { pctx.lineTo(cur.x, cur.y); pctx.stroke() } drawing = true; lastPt = cur }
+            else { drawing = false; lastPt = cur }
+            log(`Pinza ${pinch.toFixed(3)} ${pinch < threshold ? 'ON' : 'OFF'}`)
+          } else {
+            drawing = false; lastPt = null
+            log('Mano no detectada')
           }
         })
         compatLoaded = true
