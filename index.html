@@ -49,7 +49,7 @@
         <div class="row"><button id="start">Iniciar cámara</button><button id="stop">Detener</button></div>
         <div class="row"><label>Dispositivo</label><select id="device"></select><button id="refresh">Actualizar</button></div>
         <div class="row"><label>Umbral pinza</label><input type="range" id="thresh" min="0.02" max="0.12" step="0.005" value="0.06"></div>
-        <div class="row"><label>Modo</label><label><input type="checkbox" id="drawAlways"> Dibujar siempre</label><label><input type="checkbox" id="showDots" checked> Ver puntos</label></div>
+        <div class="row"><label>Modo</label><label><input type="checkbox" id="drawAlways"> Dibujar siempre</label><label><input type="checkbox" id="showDots" checked> Ver puntos</label><button id="compat">Modo compatibilidad</button></div>
         <div class="row"><label>Color</label><input type="color" id="color" value="#00e5ff"></div>
         <div class="row"><label>Grosor</label><input type="range" id="size" min="1" max="30" value="6"></div>
         <div class="row"><label>Suavizado</label><input type="range" id="smooth" min="0" max="0.9" step="0.05" value="0.3"></div>
@@ -81,6 +81,7 @@
     const threshInp = document.getElementById('thresh')
     const drawAlwaysInp = document.getElementById('drawAlways')
     const showDotsInp = document.getElementById('showDots')
+    const compatBtn = document.getElementById('compat')
 
     let stream = null
     let ctxPaint = null
@@ -92,6 +93,12 @@
     let running = false
     let lastTime = performance.now(), frames = 0
     let clearTimer = 0
+    // Fallback legacy MediaPipe Hands
+    let legacyActive = false
+    let legacyLandmarks = null
+    let legacyHands = null
+    let noDetectMs = 0
+
 
     function log(msg){ logEl.textContent = msg }
 
@@ -181,7 +188,10 @@
       const vh = video.videoHeight || height
       if (vw && vh){ const stageRect = document.getElementById('stage').getBoundingClientRect(); width = stageRect.width|0; height = stageRect.height|0; paint.width = width; paint.height = height; overlay.width = width; overlay.height = height }
 
-      const results = handLandmarker ? handLandmarker.detectForVideo(video, now) : null
+      let results = handLandmarker ? handLandmarker.detectForVideo(video, now) : null
+      if (!results || !results.landmarks || !results.landmarks.length){ noDetectMs += 16 } else { noDetectMs = 0 }
+      if (!legacyActive && noDetectMs > 1500){ initLegacyHands() }
+      if (legacyActive && legacyLandmarks){ results = { landmarks: [ legacyLandmarks.map(p => ({x:p.x, y:p.y})) ] } }
       ctxOverlay.clearRect(0,0,width,height)
 
       if (results && results.landmarks && results.landmarks.length){
@@ -220,10 +230,28 @@
     clearBtn.addEventListener('click', ()=> ctxPaint && ctxPaint.clearRect(0,0,paint.width,paint.height))
     saveBtn.addEventListener('click', ()=>{ const out = document.createElement('canvas'); out.width = width; out.height = height; const octx = out.getContext('2d'); octx.drawImage(paint,0,0); const link = document.createElement('a'); link.download = `CamDraw-${Date.now()}.png`; link.href = out.toDataURL('image/png'); link.click() })
     refreshBtn.addEventListener('click', enumerateCams)
+    compatBtn.addEventListener('click', initLegacyHands)
 
     if (!location.protocol.startsWith('https')){ log('Abre esta página con HTTPS') }
     enumerateCams()
     window.addEventListener('resize', resizeCanvases)
+
+    async function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.body.appendChild(s) }) }
+    async function initLegacyHands(){
+      if (legacyHands) { legacyActive = true; log('Compat, activo'); return }
+      try{
+        log('Cargando modo compatibilidad...')
+        await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js')
+        await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js')
+        legacyHands = new window.Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` })
+        legacyHands.setOptions({ maxNumHands:1, modelComplexity:1, minDetectionConfidence:0.3, minTrackingConfidence:0.3 })
+        legacyHands.onResults(r=>{ if (r.multiHandLandmarks && r.multiHandLandmarks.length){ legacyLandmarks = r.multiHandLandmarks[0]; } else { legacyLandmarks = null } })
+        async function pump(){ if (!legacyActive) return; if (video.readyState >= 2){ await legacyHands.send({image: video}) } requestAnimationFrame(pump) }
+        legacyActive = true
+        pump()
+        log('Compat, activo')
+      }catch(e){ log('Error compat, ' + e.message) }
+    }
   </script>
 </body>
 </html>
