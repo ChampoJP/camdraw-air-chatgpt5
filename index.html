@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CamDraw Air, cámara + puntos de mano</title>
+  <title>CamDraw Air, cámara + puntos de mano (compat)</title>
   <style>
     :root { --bg:#0b0f14; --fg:#e8eef6; --muted:#98a2b3 }
     *{box-sizing:border-box}
@@ -23,7 +23,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>Cámara + puntos de mano</h1>
+    <h1>Cámara + puntos de mano (compatibilidad)</h1>
     <div class="stage">
       <video id="cam" playsinline autoplay muted></video>
       <canvas id="overlay"></canvas>
@@ -38,13 +38,12 @@
         <button id="stop">Detener</button>
         <button id="draw">Dibujar con mouse</button>
         <button id="clear">Limpiar dibujo</button>
-        <button id="load">Cargar detector</button>
+        <button id="loadCompat">Cargar detector compat</button>
       </div>
     </div>
     <div id="log" class="log">Listo</div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js"></script>
   <script>
     const video = document.getElementById('cam')
     const overlay = document.getElementById('overlay')
@@ -54,14 +53,18 @@
     const drawBtn = document.getElementById('draw')
     const clearBtn = document.getElementById('clear')
     const deviceSel = document.getElementById('device')
-    const loadBtn = document.getElementById('load')
+    const loadCompatBtn = document.getElementById('loadCompat')
     const logEl = document.getElementById('log')
 
     let stream = null
     let drawMode = false
     let drawing = false
-    let landmarker = null
     let running = false
+
+    // Compat MediaPipe Hands
+    let compatLoaded = false
+    let hands = null
+    let compatActive = false
 
     function log(t, cls=''){ logEl.textContent = t; logEl.className = 'log ' + cls }
 
@@ -96,9 +99,7 @@
 
     function stopCam(){
       running = false
-      if (!stream) return
-      stream.getTracks().forEach(t=>t.stop())
-      stream = null
+      if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null }
       video.srcObject = null
       const ctx = overlay.getContext('2d')
       ctx.clearRect(0,0,overlay.width,overlay.height)
@@ -119,38 +120,48 @@
     drawBtn.addEventListener('click', ()=>{ drawMode = !drawMode; log(drawMode? 'Dibujo con mouse activo' : 'Dibujo con mouse inactivo', drawMode? 'ok' : '') })
     clearBtn.addEventListener('click', ()=> ctx.clearRect(0,0,overlay.width,overlay.height))
 
-    // Cargar solo el detector y dibujar puntos, sin gestos
-    async function loadDetector(){
+    // Utilidad para cargar scripts externos
+    async function loadScript(src){
+      return new Promise((resolve, reject)=>{
+        const s = document.createElement('script')
+        s.src = src
+        s.onload = resolve
+        s.onerror = ()=>reject(new Error('No se pudo cargar ' + src))
+        document.head.appendChild(s)
+      })
+    }
+
+    async function loadCompat(){
       try{
-        log('Cargando detector...')
-        const fs = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm')
-        landmarker = await HandLandmarker.createFromOptions(fs, {
-          baseOptions: { modelAssetPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/hand_landmarker.task' },
-          numHands: 1,
-          runningMode: 'VIDEO'
+        if (compatLoaded){ compatActive = true; log('Compat listo', 'ok'); return }
+        log('Cargando compat...')
+        await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js')
+        await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js')
+        hands = new window.Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` })
+        hands.setOptions({ maxNumHands:1, modelComplexity:1, minDetectionConfidence:0.5, minTrackingConfidence:0.5 })
+        hands.onResults(res=>{
+          const w = overlay.width, h = overlay.height
+          ctx.clearRect(0,0,w,h)
+          if (res.multiHandLandmarks && res.multiHandLandmarks.length){
+            const lms = res.multiHandLandmarks[0]
+            ctx.fillStyle = '#a5b4fc'
+            for (const p of lms){ const x = (1 - p.x) * w; const y = p.y * h; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill() }
+          }
         })
-        log('Detector listo', 'ok')
-      }catch(e){ log('Error al cargar detector, ' + e.message, 'err') }
+        compatLoaded = true
+        compatActive = true
+        pump()
+        log('Compat listo', 'ok')
+      }catch(e){ log('Error compat, ' + e.message, 'err') }
     }
 
-    loadBtn.addEventListener('click', loadDetector)
-
-    function loop(){
-      if (!running) return
-      const w = overlay.width, h = overlay.height
-      ctx.clearRect(0,0,w,h)
-
-      if (landmarker){
-        const now = performance.now()
-        const results = landmarker.detectForVideo(video, now)
-        if (results && results.landmarks && results.landmarks.length){
-          const lms = results.landmarks[0]
-          ctx.fillStyle = '#a5b4fc'
-          for (const p of lms){ const x = (1 - p.x) * w; const y = p.y * h; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill() }
-        }
-      }
-      requestAnimationFrame(loop)
+    async function pump(){
+      if (!compatActive) return
+      if (running && video.readyState >= 2){ await hands.send({ image: video }) }
+      requestAnimationFrame(pump)
     }
+
+    loadCompatBtn.addEventListener('click', loadCompat)
 
     if (!location.protocol.startsWith('https')) log('Abre en HTTPS', 'err')
     if (!navigator.mediaDevices) log('API mediaDevices no disponible', 'err')
